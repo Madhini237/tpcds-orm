@@ -1,5 +1,6 @@
-from sqlalchemy import select, func, desc, asc,or_, and_, case
+from sqlalchemy import select, func, desc, asc,or_, and_, case , exists, union_all
 from database import engine
+from sqlalchemy.orm import aliased
 from models import Customer, StoreSales
 
 with engine.connect() as connection:
@@ -144,8 +145,7 @@ with engine.connect() as connection:
         print(row)
 
     # Q24. Display customers who have store sales above 100
-    query24 = select(Customer).where(Customer.c_customer_sk.in_(select(StoreSales.ss_customer_sk).where(
-            StoreSales.ss_ext_sales_price > 100)))
+    query24 = select(Customer).where(Customer.c_customer_sk.in_(select(StoreSales.ss_customer_sk).where(StoreSales.ss_ext_sales_price > 100)))
     print("\nQ24. Customers With Store Sales Above 100:")
     for row in connection.execute(query24).fetchmany(10):
         print(row)
@@ -157,3 +157,65 @@ with engine.connect() as connection:
     print("\nQ25. Top 10 Customers By Total Store Sales:")
     for row in connection.execute(query25):
         print(row)
+
+    # Q26. Display customers who have never made store purchases
+    query26 = select(Customer.c_customer_id).where(Customer.c_customer_sk.not_in(select(StoreSales.ss_customer_sk).where(
+                StoreSales.ss_customer_sk.is_not(None)))).limit(10)
+    print("\nQ26. Customers Without Store Purchases:")
+    for row in connection.execute(query26):
+        print(row)
+
+    # Q27. Display all customers and their store purchases using LEFT JOIN
+    query27 = (select(Customer.c_customer_id, StoreSales.ss_ticket_number).select_from(Customer)
+        .outerjoin(StoreSales, Customer.c_customer_sk == StoreSales.ss_customer_sk).limit(10))
+    print("\nQ27. Customers With Their Store Purchases:")
+    for row in connection.execute(query27):
+        print(row)
+
+    # Q28. Display customers whose purchase count is above the average purchase count per customer
+    customer_counts = (select(func.count().label("purchase_count")).select_from(StoreSales)
+        .where(StoreSales.ss_customer_sk.is_not(None)).group_by(StoreSales.ss_customer_sk).subquery())
+    average_count = select(func.avg(customer_counts.c.purchase_count)).scalar_subquery()
+    query28 = (select(Customer.c_customer_id,func.count().label("purchase_count"))
+        .join(StoreSales, Customer.c_customer_sk == StoreSales.ss_customer_sk)
+        .group_by(Customer.c_customer_sk, Customer.c_customer_id).having(func.count() > average_count).limit(10))
+    print("\nQ28. Customers With Above-Average Purchase Counts:")
+    for row in connection.execute(query28):
+        print(row)
+
+    # Q29. Display store sales records whose sales price is above that customer's average sales price
+    inner_sales = aliased(StoreSales)
+    average_customer_sales = (select(func.avg(inner_sales.ss_sales_price)).where(inner_sales.ss_customer_sk == StoreSales.ss_customer_sk)
+        .correlate(StoreSales).scalar_subquery())
+    query29 = (select(StoreSales.ss_customer_sk,StoreSales.ss_ticket_number,StoreSales.ss_sales_price)
+        .where(StoreSales.ss_customer_sk.is_not(None)).where(StoreSales.ss_sales_price > average_customer_sales).limit(10))
+    print("\nQ29. Sales Above Each Customer's Average Sales Price:")
+    for row in connection.execute(query29):
+        print(row)
+
+    # Q30. Display customers who have made at least one store purchase using EXISTS
+    purchase_exists = exists(select(1).select_from(StoreSales).where(StoreSales.ss_customer_sk == Customer.c_customer_sk))
+    query30 = select(Customer.c_customer_id).where(purchase_exists).limit(10)
+    print("\nQ30. Customers Who Have Made Store Purchases:")
+    for row in connection.execute(query30):
+        print(row)
+
+    # Q31. Display customers who have never made store purchases using NOT EXISTS
+    query31 = select(Customer.c_customer_id).where(~purchase_exists).limit(10)
+    print("\nQ31. Customers Who Have Never Made Store Purchases:")
+    for row in connection.execute(query31):
+        print(row)
+
+    # Q32. Count high-value and low-value store sales using conditional aggregation
+    query32 = select(func.count(case((StoreSales.ss_sales_price > 100, 1))).label("high_value_sales"),
+        func.count(case((StoreSales.ss_sales_price <= 100, 1))).label("low_value_sales"))
+    print("\nQ32. High-Value and Low-Value Sales Counts:")
+    for row in connection.execute(query32):
+        print(row)
+
+    # Q33. Display customers whose first names start with A
+    query33 = (select(Customer.c_customer_id, Customer.c_first_name).where(func.lower(Customer.c_first_name).like("a%")).limit(10))
+    print("\nQ33. Customers Whose First Names Start With A:")
+    for row in connection.execute(query33):
+        print(row)
+
