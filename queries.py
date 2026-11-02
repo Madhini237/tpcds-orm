@@ -1,7 +1,7 @@
-from sqlalchemy import select, func, desc, asc,or_, and_, case , exists, union_all
+from sqlalchemy import select, func, desc, asc,or_, and_, case , exists, union_all, Integer, extract,text,union,cast
 from database import engine
 from sqlalchemy.orm import aliased
-from models import Customer, StoreSales
+from models import Customer, StoreSales, DateDim , Item , Store
 
 with engine.connect() as connection:
 
@@ -219,3 +219,157 @@ with engine.connect() as connection:
     for row in connection.execute(query33):
         print(row)
 
+    # Q34. Display customers from Canada or the United States
+    query34 = select(Customer).where(or_(Customer.c_birth_country == "CANADA",
+        Customer.c_birth_country == "UNITED STATES"))
+    print("\nQ34. Customers from Canada or the United States:")
+    for row in connection.execute(query34).fetchmany(10):
+        print(row)
+
+
+    # Q35. Display customers not born in 1980
+    query35 = select(Customer).where(Customer.c_birth_year != 1980)
+    print("\nQ35. Customers Not Born in 1980:")
+    for row in connection.execute(query35).fetchmany(10):
+        print(row)
+
+
+    # Q36. Display customers born after 1980 who are preferred customers
+    query36 = select(Customer).where(and_(Customer.c_birth_year > 1980,Customer.c_preferred_cust_flag == "Y" ))
+    print("\nQ36. Preferred Customers Born After 1980:")
+    for row in connection.execute(query36).fetchmany(10):
+        print(row)
+
+
+    # Q37. Display customers whose first name ends with 'a'
+    query37 = select(Customer).where(Customer.c_first_name.endswith("a"))
+    print("\nQ37. Customers Whose First Name Ends with 'a':")
+    for row in connection.execute(query37).fetchmany(10):
+        print(row)
+
+
+    # Q38. Display customers whose first name contains 'an'
+    query38 = select(Customer).where(Customer.c_first_name.contains("an"))
+    print("\nQ38. Customers Whose First Name Contains 'an':")
+    for row in connection.execute(query38).fetchmany(10):
+        print(row)
+
+
+    # Q39. Display customer names in uppercase
+    query39 = select(Customer.c_customer_id,func.upper(Customer.c_first_name).label("uppercase_name"))
+    print("\nQ39. Customer Names in Uppercase:")
+    for row in connection.execute(query39).fetchmany(10):
+        print(row)
+
+
+    # Q40. Display customers with the length of their first name
+    query40 = select(Customer.c_customer_id,Customer.c_first_name,func.length(Customer.c_first_name).label("name_length"))
+    print("\nQ40. First Name Length:")
+    for row in connection.execute(query40).fetchmany(10):
+        print(row)
+
+
+    # Q41. Display customer email addresses; show 'No Email' if NULL
+    query41 = select(Customer.c_customer_id,func.coalesce(Customer.c_email_address, "No Email").label("email"))
+    print("\nQ41. Customer Email Addresses:")
+    for row in connection.execute(query41).fetchmany(10):
+        print(row)
+
+
+    # Q42. Return NULL for birth year 2000; otherwise display the birth year
+    query42 = select(Customer.c_customer_id,func.nullif(Customer.c_birth_year, 2000).label("birth_year"))
+    print("\nQ42. NULLIF Example:")
+    for row in connection.execute(query42).fetchmany(10):
+        print(row)
+
+
+    # Q43. Convert customer ID to an integer
+    query43 = select(cast(Customer.c_customer_id, Integer).label("customer_id") )
+    print("\nQ43. Customer IDs Converted to Integer:")
+    for row in connection.execute(query43).fetchmany(10):
+        print(row)
+
+    # Q44. Display dates from the years 2000 to 2005
+    query44 = select(DateDim).where(DateDim.d_year.between(2000, 2005))
+    print("\nQ44. Dates Between 2000 and 2005:")
+    for row in connection.execute(query44).fetchmany(10):
+        print(row)
+
+
+    # Q45. Display dates from March to June in the year 2000
+    query45 = select(DateDim).where(DateDim.d_year == 2000,DateDim.d_moy.between(3, 6))
+    print("\nQ45. Dates from March to June 2000:")
+    for row in connection.execute(query45).fetchmany(10):
+        print(row)
+
+
+    # Q46. Extract the year from each date
+    query46 = select(DateDim.d_date,extract("YEAR", DateDim.d_date).label("year"))
+    print("\nQ46. Extract Year from Date:")
+    for row in connection.execute(query46).fetchmany(10):
+        print(row)
+
+
+    # Q47. Display dates belonging to the year 2000
+    query47 = select(DateDim.d_date).where(extract("YEAR", DateDim.d_date) == 2000)
+    print("\nQ47. Dates in the Year 2000:")
+    for row in connection.execute(query47).fetchmany(10):
+        print(row)
+
+
+    # Q48. Display the current date
+    query48 = select(func.current_date().label("current_date"))
+    print("\nQ48. Current Date:")
+    for row in connection.execute(query48):
+        print(row)
+
+
+    # Q49. Display the date and the date one day later
+    query49 = select(DateDim.d_date,func.date_add(DateDim.d_date, text("INTERVAL 1 DAY")).label("next_date"))
+    print("\nQ49. Date and Next Date:")
+    for row in connection.execute(query49).fetchmany(10):
+        print(row)
+
+    # Q50. Display total sales for each year
+    query50 = (select(DateDim.d_year,func.sum(StoreSales.ss_ext_sales_price).label("total_sales"))
+    .join(DateDim, StoreSales.ss_sold_date_sk == DateDim.d_date_sk).group_by(DateDim.d_year).order_by(DateDim.d_year))
+    print("\nQ50. Total Sales by Year:")
+    for row in connection.execute(query50):
+        print(row)
+
+
+    # Q51. Display total sales for each year and month
+    query51 = (select(DateDim.d_year,DateDim.d_moy,func.sum(StoreSales.ss_ext_sales_price).label("total_sales"))
+        .join(DateDim, StoreSales.ss_sold_date_sk == DateDim.d_date_sk).group_by(DateDim.d_year, DateDim.d_moy).order_by(DateDim.d_year, DateDim.d_moy))
+    print("\nQ51. Total Sales by Year and Month:")
+    for row in connection.execute(query51).fetchmany(20):
+        print(row)
+
+
+    
+    # Q52. Display years where total sales exceed 1,000,000
+    query52 = (select(DateDim.d_year,func.sum(StoreSales.ss_ext_sales_price).label("total_sales"))
+        .join(DateDim,StoreSales.ss_sold_date_sk == DateDim.d_date_sk).group_by(DateDim.d_year)
+        .having(func.sum(StoreSales.ss_ext_sales_price) > 1000000).order_by(DateDim.d_year))
+
+    print("\nQ52. Years with Total Sales Above 1,000,000:")
+    for row in connection.execute(query52):
+        print(row)
+
+
+    # Q53. Display customer IDs from Canada and the United States, retaining duplicates
+    query53a = select(Customer.c_customer_id).where(Customer.c_birth_country == "CANADA")
+    query53b = select(Customer.c_customer_id).where(Customer.c_birth_country == "UNITED STATES")
+    query53 = union_all(query53a, query53b)
+    print("\nQ53. Customer IDs Using UNION ALL:")
+    for row in connection.execute(query53).fetchmany(20):
+        print(row)
+
+
+    # Q54. Display customer IDs from Canada and the United States, removing duplicates
+    query54a = select(Customer.c_customer_id).where(Customer.c_birth_country == "CANADA")
+    query54b = select(Customer.c_customer_id).where(Customer.c_birth_country == "UNITED STATES")
+    query54 = union(query54a, query54b)
+    print("\nQ54. Customer IDs Using UNION:")
+    for row in connection.execute(query54).fetchmany(20):
+        print(row) 
